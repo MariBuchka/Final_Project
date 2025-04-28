@@ -1,214 +1,180 @@
-import allure
 import pytest
+import allure
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.by import By
+
 from config import main_url, cookies
-from pages.UIMainPage import MainPage
-from pages.UISearchPage import SearchPage
-from pages.UIMoviePage import MoviePage
-from pages.UISeriesPage import SeriesPage
-from pages.UIPersonPage import PersonPage
+from pages.UIMainPage import UiMovie
+from pages.UIPersonPage import UiPerson
+from pages.UITopCollection import UiTopCollection
+from pages.UIAdvancedSearch import UiAdvancedSearch
+from pages.UIDirectorPage import UiDirector
 
 
 @pytest.fixture
-def browser():
-    """
-    Фикстура для инициализации и завершения работы драйвера (browser).
-    """
+def web_driver():
     chrome_options = Options()
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+        "--disable-blink-features=AutomationControlled"
     )
-    #chrome_options.add_argument("--headless")
+    chrome_options.add_argument(
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+    )
 
-    browser = webdriver.Chrome(options=chrome_options)
-    browser.maximize_window()
-    yield browser
-    browser.quit()
+    driver = webdriver.Chrome(options=chrome_options)
+    driver.maximize_window()
+    driver.implicitly_wait(4)
+    yield driver
+    driver.quit()
+
 
 @pytest.fixture
-def main_page(browser):
+def main_page(web_driver):
     """
     Фикстура для авторизации пользователя (подкладываем cookies).
     """
-    browser.get(main_url)
+    web_driver.get(main_url)
 
     for cookie in cookies:
-        browser.add_cookie(cookie)
+        web_driver.add_cookie(cookie)
 
-    browser.get(main_url)
-    return MainPage(browser)
+    web_driver.refresh()
+    return web_driver
 
-@allure.feature("UI Тесты Кинопоиска")
-@allure.story("Smoke")
-@allure.title("Проверка заголовка главной страницы")
-@pytest.mark.smoke
-def test_check_main_page_title(main_page):
-    with allure.step("Заголовок главной страницы"):
-        assert main_page.check_page_title(
-            "Кинопоиск. Онлайн кинотеатр. Фильмы сериалы мультфильмы и энциклопедия"
+
+@pytest.fixture
+def top_collection_page(main_page):
+    return UiTopCollection(main_page)
+
+
+@allure.epic("UI Testing")
+@allure.severity(allure.severity_level.CRITICAL)
+@allure.story("Проверка работы поиска сайта Кинопоиск")
+@allure.id("UI-1")
+@allure.title("Поиск фильма в подборках")
+def test_search_in_lists(top_collection_page: UiTopCollection):
+    """
+    Тест проверяет поиск фильма в подборках.
+
+    :param collection: str - ссылка на список фильмов.
+    :param number_in_list: int - номер фильма в списке.
+    :param title: str - название фильма.
+    """
+    with allure.step("Заполнение данных для поиска"):
+        collection = "/theme_school/"
+        number_in_list = 1
+        title = "Общество мертвых поэтов"
+
+    with allure.step("Проверка наличия искомого фильма в списке"):
+        text = top_collection_page.get_title_from_collection(
+            collection, number_in_list
         )
+    assert text == title
 
-@allure.story("Навигация")
-@allure.title("Переход в раздел 'Сериалы' через боковое меню")
-def test_side_menu_navigation(main_page):
-    """Тест навигации через боковое меню."""
-    excpected_url = "https://www.kinopoisk.ru/lists/categories/movies/3/"
 
-    with allure.step("Найти и кликнуть на раздел 'Сериалы' в боковом меню"):
-        current_url = main_page.navigate_to_series()
+@pytest.fixture
+def advanced_search_page(main_page):
+    return UiAdvancedSearch(main_page)
 
-    with allure.step("Проверить URL страницы"):
-        assert current_url == excpected_url
 
-@allure.story("Поиск")
-@allure.title("Поиск существующего фильма/сериала/персоны")
-@pytest.mark.positive
-@pytest.mark.parametrize(
-    "query",
-    [
-        "ОДИН ДОМА", "Приключения Паддингтона 2", "Как Я Встретил Вашу Маму", "Нил Патрик Харрис"
-    ],
-)
-def test_search_by_title(main_page, query):
-    with allure.step(f"Поиск фильмов/сериалов/персон "
-                     f"по названию/имени '{query}'"):
-        main_page.search(query)
-
-    search_page = SearchPage(main_page.browser)
-
-    with allure.step("Проверяем, что количество результатов больше 0"):
-        assert search_page.get_search_results_count() > 0
-
-    with allure.step(f"Проверяем, что запрос '{query}'"
-                     f" содержится в результатах"):
-        titles = search_page.find_content_titles()
-        assert any(query.lower() in title.lower() for title in titles), \
-            (f"Запрос '{query}' не найден. "
-            f"Результаты: {titles}")
-
-# Тест 3: Открытие страницы через поисковые подсказки
-@allure.story("Поиск")
-@allure.title("Открытие страницы фильма через поисковые подсказки")
-@pytest.mark.parametrize(
-    "query, expected_title",
-    [
-        ("Зеленая миля", "Зеленая миля"),
-        ("Форрест Гамп", "Форрест Гамп"),
-    ],
-)
-def test_open_from_suggestions(main_page, query, expected_title):
+@allure.id("UI-2")
+@allure.title("Использование функции расширенного поиска фильмов "
+              "по стране и жанру")
+def test_advanced_search(advanced_search_page: UiAdvancedSearch):
     """
-    Тест открытия страницы фильма через поисковые подсказки.
+    Тест проверяет корректность работы расширенного поиска
+    по таким параметрам, как 'Страна' и 'Жанр'.
     """
-    with allure.step(f"Ввести запрос '{query}' в поиск"):
-        search_field = main_page._wait_for_elements(*MainPage.SEARCH_INPUT)
-        search_field.clear()
-        search_field.send_keys(query)
+    with allure.step("Заполнение полей страна и жанр"):
+        country = "Россия"
+        genre = "комедия"
 
-    with allure.step("Ожидаем появления окна с подсказками"):
-        main_page._wait_for_elements(By.CSS_SELECTOR, ".styles_root__oGRI_.styles_group__1mMFN.kinopoisk-header-suggest-group")
-
-    with allure.step("Выбрать первый вариант из подсказок"):
-        suggestions = main_page.browser.find_elements(By.CSS_SELECTOR, "#suggest-container .suggest-item")
-        if not suggestions:
-            pytest.fail("Список подсказок пуст")
-        suggestions[0].click()
-
-    with allure.step(f"Проверить заголовок страницы (ожидается: {expected_title})"):
-        movie_page = MoviePage(main_page.browser)
-        assert movie_page.get_movie_title() == expected_title
+    with allure.step("Расширенный поиск фильмов по стране и жанру"):
+        result = advanced_search_page.search_by_country_and_genre(
+            country, genre
+        )
+    assert "Результаты поиска" in result
 
 
-# Тест 4: Открытие страницы из результатов поиска
-@allure.story("Поиск")
-@allure.title("Открытие страницы персоны из результатов поиска")
-def test_open_from_search_results(main_page):
-    """Тест открытия страницы из результатов поиска."""
-    with allure.step("Выполнить поиск персоны 'Том Круз'"):
-        main_page.search("Том Круз")
-
-    search_page = SearchPage(main_page.browser)
-    with allure.step("Выбрать первую персону в результатах"):
-        first_person = search_page._wait_for_elements(By.CSS_SELECTOR, "[data-type='person']:first-child")
-        first_person.click()
-
-    person_page = PersonPage(main_page.browser)
-    with allure.step("Проверить имя персоны"):
-        assert "Том Круз" in person_page.get_person_name()
+@pytest.fixture
+def movie_page(main_page):
+    return UiMovie(main_page)
 
 
-# Тест 5: Оценивание фильма
-@allure.story("Оценки")
-@allure.title("Оценивание фильма")
-@pytest.mark.skip(reason="Требуется авторизация с особыми правами")
-def test_rate_movie(main_page):
-    """Тест оценки фильма."""
-    with allure.step("Открыть страницу фильма 'Форрест Гамп'"):
-        movie_page = MoviePage(main_page.browser)
-        movie_page.open(448)
-
-    with allure.step("Нажать кнопку 'Оценить'"):
-        rate_button = main_page._wait_for_elements(By.CSS_SELECTOR, ".rating-button")
-        rate_button.click()
-
-    with allure.step("Выбрать оценку 8"):
-        star = main_page._wait_for_elements(By.XPATH, "//div[@class='star'][8]")
-        ActionChains(main_page.browser).move_to_element(star).click().perform()
+@pytest.fixture
+def person_page(main_page):
+    return UiPerson(main_page)
 
 
-    with allure.step("Проверить установленную оценку"):
-        user_rating = main_page._wait_for_elements(By.CSS_SELECTOR, ".user-rating").text
-        assert "8" in user_rating
+@allure.id("UI-3")
+@allure.title("Поиск конкретного фильма и актёра в главной роли")
+def test_search_for_film(movie_page: UiMovie, person_page: UiPerson):
+    """
+    Тест проверяет поиск главного актера фильма.
+    """
+    with allure.step("Выбор конкретного фильма и актёра"):
+        title = "Матрица"
+        actor = "Киану Ривз"
+
+    with allure.step("Поиск по названию фильма"):
+        movie_page.search(title)
+
+    with allure.step("Выбор первого фильма из полученного списка"):
+        movie_page.search_film_results()
+
+    with allure.step("Проверка актёра в главной роли"):
+        result = person_page.find_main_cast()
+    assert actor in result
 
 
-# Тест 6: Оценивание персоны
-@allure.story("Оценки")
-@allure.title("Добавление персоны в любимые")
-@pytest.mark.skip(reason="Требуется авторизация с особыми правами")
-def test_rate_person(main_page):
-    """Тест добавления персоны в любимые."""
-    with allure.step("Открыть страницу персоны 'Леонардо ДиКаприо'"):
-        person_page = PersonPage(main_page.browser)
-        person_page.open(1900)
+@allure.id("UI-4")
+@allure.title("Поиск фильма из списка лучших у актёра")
+def test_actor_film_list(movie_page: UiMovie, person_page: UiPerson):
+    """
+    Тест проверяет наличие конкретного фильма
+    в фильмографии актёра.
+    """
+    with allure.step("Выбор интересующего актёра и указание фильма, "
+                     "в котором он играл"):
+        name = "Нил Патрик Харис"
+        title = "Как я встретил вашу маму"
 
-    with allure.step("Нажать кнопку 'Любимая звезда'"):
-        favorite_button = main_page._wait_for_elements(By.CSS_SELECTOR, "[aria-label='Добавить в любимые звезды']")
-        initial_state = favorite_button.get_attribute("aria-checked")
-        favorite_button.click()
+    with allure.step("Запрос на поиск актёра по имени"):
+        movie_page.search(name)
 
-    with allure.step("Проверить изменение состояния кнопки"):
-        new_state = favorite_button.get_attribute("aria-checked")
-        assert new_state != initial_state
+    with allure.step("Получение первого актёра из списка. "
+                     "Переход на его страницу"):
+        person_page.search_person_results()
+
+    with allure.step("Получение списка лучших фильмов актёра"):
+        films = person_page.get_top_films_by_actor()
+    assert title in films
 
 
-# Тест 7: Расширенный поиск
-@allure.story("Поиск")
-@allure.title("Расширенный поиск по жанру и году")
-def test_advanced_search(main_page):
-    """Тест расширенного поиска."""
-    with allure.step("Открыть страницу расширенного поиска"):
-        main_page.browser.get(f"{main_url}search/advanced/")
+@pytest.fixture
+def director_page(main_page):
+    return UiDirector(main_page)
 
-    with allure.step("Установить фильтр: Жанр='комедия', Год='2020-2023'"):
-        genre_checkbox = main_page._wait_for_elements(By.XPATH,
-                                                      "//span[contains(text(),'комедия')]/preceding-sibling::input")
-        genre_checkbox.click()
 
-        year_from = main_page._wait_for_elements(By.NAME, "yearFrom")
-        year_from.clear()
-        year_from.send_keys("2020")
+@allure.id("UI-5")
+@allure.title("Поиск фильма по режиссёру")
+def test_director_film_list(movie_page: UiMovie, person_page: UiPerson,
+                            director_page: UiDirector):
+    """
+    Тест проверяет возможность поиска фильма по режиссёру.
+    """
+    with allure.step("Выбор конкретного режиссёра "
+                     "и фильма, который он снимал"):
+        name = "Леонид Гайдай"
+        title = "Спортлото-82"
 
-        year_to = main_page._wait_for_elements(By.NAME, "yearTo")
-        year_to.clear()
-        year_to.send_keys("2023")
+    with allure.step("Поиск режиссёра по имени"):
+        movie_page.search(name)
 
-        submit_button = main_page._wait_for_elements(By.CSS_SELECTOR, ".form__submit")
-        submit_button.click()
+    with allure.step("Переход на страницу первой в списке персоны"):
+        person_page.search_person_results()
 
-    search_page = SearchPage(main_page.browser)
-    with allure.step("Проверить результаты поиска"):
-        assert search_page.get_search_results_count() > 0
+    with allure.step("Получение списка фильмов режиссёра"):
+        films = director_page.get_film_list_of_director()
+    assert title in films

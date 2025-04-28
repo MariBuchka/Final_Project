@@ -108,7 +108,8 @@ class TestKinopoiskAPI:
     )
     def test_search_person_positive(self, search_persons_api, query, expected):
         """
-        Тест проверяет корректность поиска персон (актеров, режиссеров и т.д.) по именам.
+        Тест проверяет корректность поиска персон
+        (актеров, режиссеров и т.д.) по именам.
 
         :param search_persons_api: экз-р класса SearchPersons, предоставляющий
                                     методы для работы с API поиска персон.
