@@ -3,6 +3,9 @@ from baseAPI import BaseAPI
 
 
 class GetPerson(BaseAPI):
+    """
+    Класс, содержащий методы получения информации о персонах.
+    """
     def __init__(self):
         super().__init__("/v1.4/person/")
 

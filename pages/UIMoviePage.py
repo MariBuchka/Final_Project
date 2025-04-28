@@ -1,32 +1,45 @@
 from selenium.webdriver.common.by import By
-from config import Config
-from pages.UIBasePage import BasePage
+from selenium.webdriver.common.action_chains import ActionChains
+from pages.UIMainPage import MainPage
 
 
-class MoviePage(BasePage):
+class MoviePage(MainPage):
+    """
+    Класс страницы фильма.
+
+    Локаторы:
+    MOVIE_TITLE
+    MOVIE_YEAR
+    MOVIE_RATING
+    USER_RATING - оценка пользователя.
+    STAR_RATING - локатор звезды.
+    """
     MOVIE_TITLE = (By.CSS_SELECTOR, ".styles_title__3kbkm h1")
     MOVIE_YEAR = (By.CSS_SELECTOR, ".styles_year__2GXQR")
     MOVIE_RATING = (By.CSS_SELECTOR, ".styles_rating__2XaDp")
-    RATE_BUTTON = (By.CSS_SELECTOR, ".styles_ratingBtn__1XHNR")
-    RATING_STARS = (By.CSS_SELECTOR, ".styles_ratingStars__3zP5Z span")
-    CURRENT_RATING = (By.CSS_SELECTOR, ".styles_userRating__1Xlkr")
+    USER_RATING = (By.CSS_SELECTOR, ".user-rating")
+    STAR_RATING = (By.XPATH, "//div[@class='star'][8]")
+
 
     def open(self, movie_id):
-        self.browser.get(f"{Config.base_url}/film/{movie_id}/")
+        """Открывает страницу фильма по ID."""
+        self.browser.get(f"{self.url}film/{movie_id}/")
 
     def get_movie_title(self):
-        return self.element(self.MOVIE_TITLE).text
+        return self._wait_for_elements(*self.MOVIE_TITLE).text
 
     def get_movie_year(self):
-        return int(self.element(self.MOVIE_YEAR).text)
+        return int(self._wait_for_elements(*self.MOVIE_YEAR).text)
 
     def get_movie_rating(self):
-        return float(self.element(self.MOVIE_RATING).text)
+        return float(self._wait_for_elements(*self.MOVIE_RATING).text)
 
-    def rate_movie(self, stars):
-        self.element(self.RATE_BUTTON).click()
-        stars_element = self.browser.find_elements(*self.RATING_STARS)[stars - 1]
-        stars_element.click()
+    def rate_movie(self, score):
+        """Поставить оценку фильму (п.5)."""
+        self._wait_for_elements(*self.RATING_BUTTON).click()
+        star = self._wait_for_elements(By.XPATH, f"//div[@class='star'][{score}]")
+        ActionChains(self.browser).move_to_element(star).click().perform()
 
-    def get_current_rating(self):
-        return self.element(self.CURRENT_RATING).text
+    def get_user_rating(self):
+        """Получить текущую оценку пользователя."""
+        return self._wait_for_elements(*self.USER_RATING).text

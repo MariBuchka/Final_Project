@@ -3,6 +3,9 @@ from baseAPI import BaseAPI
 
 
 class GetMovie(BaseAPI):
+    """
+    Класс, содержащий методы получения информации о фильмах/сериалах.
+    """
     def __init__(self):
         super().__init__("/v1.4/movie/")
 

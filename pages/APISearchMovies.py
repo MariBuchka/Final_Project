@@ -3,7 +3,9 @@ from baseAPI import BaseAPI
 
 
 class SearchMovies(BaseAPI):
-
+    """
+    Класс, содержащий методы поиска фильмов/сериалов.
+    """
     def __init__(self):
         super().__init__("/v1.4/movie/search")
 

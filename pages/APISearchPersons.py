@@ -3,6 +3,9 @@ from baseAPI import BaseAPI
 
 
 class SearchPersons(BaseAPI):
+    """
+    Класс, содержащий методы поиска персон.
+    """
     def __init__(self):
         super().__init__("/v1.4/person/search")
 

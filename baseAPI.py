@@ -1,8 +1,8 @@
 import requests
-from config import Config
+from config import APIConfig
 
 
-class BaseAPI(Config):
+class BaseAPI(APIConfig):
     def __init__(self, endpoint=""):
         super().__init__()
         self.base_url = f"{self.api_base_url}{endpoint}"

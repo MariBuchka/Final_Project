@@ -1,112 +1,214 @@
 import allure
 import pytest
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.by import By
+from config import main_url, cookies
 from pages.UIMainPage import MainPage
 from pages.UISearchPage import SearchPage
 from pages.UIMoviePage import MoviePage
 from pages.UISeriesPage import SeriesPage
+from pages.UIPersonPage import PersonPage
 
 
 @pytest.fixture
 def browser():
     """
-    Фикстура для инициализации и завершения работы драйвера.
+    Фикстура для инициализации и завершения работы драйвера (browser).
     """
-    browser = webdriver.Chrome()
+    chrome_options = Options()
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_argument(
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+    )
+    #chrome_options.add_argument("--headless")
+
+    browser = webdriver.Chrome(options=chrome_options)
     browser.maximize_window()
     yield browser
     browser.quit()
 
+@pytest.fixture
+def main_page(browser):
+    """
+    Фикстура для авторизации пользователя (подкладываем cookies).
+    """
+    browser.get(main_url)
+
+    for cookie in cookies:
+        browser.add_cookie(cookie)
+
+    browser.get(main_url)
+    return MainPage(browser)
+
 @allure.feature("UI Тесты Кинопоиска")
-class TestKinopoiskUI:
-    @allure.story("Поиск")
-    @allure.title("Поиск существующего фильма")
-    def test_search_existing_movie(self, browser):
-        """
-        Тест проверяет функционал поиска фильмов по названию.
-        """
-        main_page = MainPage(browser)
-        search_page = SearchPage(browser)
+@allure.story("Smoke")
+@allure.title("Проверка заголовка главной страницы")
+@pytest.mark.smoke
+def test_check_main_page_title(main_page):
+    with allure.step("Заголовок главной страницы"):
+        assert main_page.check_page_title(
+            "Кинопоиск. Онлайн кинотеатр. Фильмы сериалы мультфильмы и энциклопедия"
+        )
 
-        with allure.step("1. Открыть главную страницу"):
-            main_page.open_kinopoisk()
+@allure.story("Навигация")
+@allure.title("Переход в раздел 'Сериалы' через боковое меню")
+def test_side_menu_navigation(main_page):
+    """Тест навигации через боковое меню."""
+    excpected_url = "https://www.kinopoisk.ru/lists/categories/movies/3/"
 
-        with allure.step("2. Выполнить поиск фильма 'Матрица'"):
-            main_page.search("Матрица")
+    with allure.step("Найти и кликнуть на раздел 'Сериалы' в боковом меню"):
+        current_url = main_page.navigate_to_series()
 
-        with allure.step("3. Проверить результаты поиска"):
-            assert "Матрица" in search_page.get_first_result_text(), "Фильм не найден"
-            assert search_page.get_results_count() > 0, "Нет результатов поиска"
+    with allure.step("Проверить URL страницы"):
+        assert current_url == excpected_url
 
-    @allure.story("Навигация")
-    @allure.title("Проверка работы главного меню")
-    def test_main_navigation(self, browser):
-        """
-        Тест проверяет навигацию по основным разделам сайта
-        """
-        main_page = MainPage(browser)
-        series_page = SeriesPage(browser)
+@allure.story("Поиск")
+@allure.title("Поиск существующего фильма/сериала/персоны")
+@pytest.mark.positive
+@pytest.mark.parametrize(
+    "query",
+    [
+        "ОДИН ДОМА", "Приключения Паддингтона 2", "Как Я Встретил Вашу Маму", "Нил Патрик Харрис"
+    ],
+)
+def test_search_by_title(main_page, query):
+    with allure.step(f"Поиск фильмов/сериалов/персон "
+                     f"по названию/имени '{query}'"):
+        main_page.search(query)
 
-        with allure.step("1. Открыть главную страницу"):
-            main_page.open_kinopoisk()
+    search_page = SearchPage(main_page.browser)
 
-        with allure.step("2. Проверить пункты меню"):
-            menu_items = main_page.get_menu_items()
-            expected_items = ["Фильмы", "Сериалы", "Мультфильмы"]
-            for item in expected_items:
-                assert item in menu_items, f"Раздел '{item}' отсутствует"
+    with allure.step("Проверяем, что количество результатов больше 0"):
+        assert search_page.get_search_results_count() > 0
 
-        with allure.step("3. Перейти в раздел 'Сериалы'"):
-            main_page.series_link.click()
-            assert series_page.get_series_count() > 0, "Нет списка сериалов"
+    with allure.step(f"Проверяем, что запрос '{query}'"
+                     f" содержится в результатах"):
+        titles = search_page.find_content_titles()
+        assert any(query.lower() in title.lower() for title in titles), \
+            (f"Запрос '{query}' не найден. "
+            f"Результаты: {titles}")
 
-    @allure.story("Фильтры поиска")
-    @allure.title("Применение фильтров по году выпуска")
-    def test_search_filters(self, browser):
-        """
-        Тест проверяет работу фильтров при поиске
-        """
-        search_page = SearchPage(browser)
+# Тест 3: Открытие страницы через поисковые подсказки
+@allure.story("Поиск")
+@allure.title("Открытие страницы фильма через поисковые подсказки")
+@pytest.mark.parametrize(
+    "query, expected_title",
+    [
+        ("Зеленая миля", "Зеленая миля"),
+        ("Форрест Гамп", "Форрест Гамп"),
+    ],
+)
+def test_open_from_suggestions(main_page, query, expected_title):
+    """
+    Тест открытия страницы фильма через поисковые подсказки.
+    """
+    with allure.step(f"Ввести запрос '{query}' в поиск"):
+        search_field = main_page._wait_for_elements(*MainPage.SEARCH_INPUT)
+        search_field.clear()
+        search_field.send_keys(query)
 
-        with allure.step("1. Открыть расширенный поиск"):
-            search_page.open_advanced_search()
+    with allure.step("Ожидаем появления окна с подсказками"):
+        main_page._wait_for_elements(By.CSS_SELECTOR, ".styles_root__oGRI_.styles_group__1mMFN.kinopoisk-header-suggest-group")
 
-        with allure.step("2. Установить фильтр по годам"):
-            search_page.apply_year_filter(2020, 2023)
+    with allure.step("Выбрать первый вариант из подсказок"):
+        suggestions = main_page.browser.find_elements(By.CSS_SELECTOR, "#suggest-container .suggest-item")
+        if not suggestions:
+            pytest.fail("Список подсказок пуст")
+        suggestions[0].click()
 
-        with allure.step("3. Проверить результаты фильтрации"):
-            assert search_page.get_results_count() > 0, "Нет результатов после фильтрации"
+    with allure.step(f"Проверить заголовок страницы (ожидается: {expected_title})"):
+        movie_page = MoviePage(main_page.browser)
+        assert movie_page.get_movie_title() == expected_title
 
-    @allure.story("Информация о фильме")
-    @allure.title("Проверка отображения информации о фильме")
-    def test_movie_info(self, browser):
-        """
-        Тест проверяет корректность отображения информации о фильме
-        """
-        movie_page = MoviePage(browser)
 
-        with allure.step("1. Открыть страницу фильма"):
-            movie_page.open(435)  # ID "Зеленая миля"
+# Тест 4: Открытие страницы из результатов поиска
+@allure.story("Поиск")
+@allure.title("Открытие страницы персоны из результатов поиска")
+def test_open_from_search_results(main_page):
+    """Тест открытия страницы из результатов поиска."""
+    with allure.step("Выполнить поиск персоны 'Том Круз'"):
+        main_page.search("Том Круз")
 
-        with allure.step("2. Проверить основные данные"):
-            assert movie_page.get_movie_title() == "Зеленая миля"
-            assert movie_page.get_movie_year() == 1999
-            assert movie_page.get_movie_rating() >= 8.0
+    search_page = SearchPage(main_page.browser)
+    with allure.step("Выбрать первую персону в результатах"):
+        first_person = search_page._wait_for_elements(By.CSS_SELECTOR, "[data-type='person']:first-child")
+        first_person.click()
 
-    @allure.story("Сериалы")
-    @allure.title("Проверка навигации по сезонам")
-    def test_series_seasons(self, browser):
-        """
-        Тест проверяет переключение между сезонами сериалов
-        """
-        series_page = SeriesPage(browser)
+    person_page = PersonPage(main_page.browser)
+    with allure.step("Проверить имя персоны"):
+        assert "Том Круз" in person_page.get_person_name()
 
-        with allure.step("1. Открыть страницу сериалов"):
-            series_page.open_series()
 
-        with allure.step("2. Открыть первый сериал из списка"):
-            series_page.open_series(0)
+# Тест 5: Оценивание фильма
+@allure.story("Оценки")
+@allure.title("Оценивание фильма")
+@pytest.mark.skip(reason="Требуется авторизация с особыми правами")
+def test_rate_movie(main_page):
+    """Тест оценки фильма."""
+    with allure.step("Открыть страницу фильма 'Форрест Гамп'"):
+        movie_page = MoviePage(main_page.browser)
+        movie_page.open(448)
 
-        with allure.step("3. Выбрать 1 сезон"):
-            series_page.select_season(1)
-            assert series_page.get_episodes_count() > 0, "Нет списка серий"
+    with allure.step("Нажать кнопку 'Оценить'"):
+        rate_button = main_page._wait_for_elements(By.CSS_SELECTOR, ".rating-button")
+        rate_button.click()
+
+    with allure.step("Выбрать оценку 8"):
+        star = main_page._wait_for_elements(By.XPATH, "//div[@class='star'][8]")
+        ActionChains(main_page.browser).move_to_element(star).click().perform()
+
+
+    with allure.step("Проверить установленную оценку"):
+        user_rating = main_page._wait_for_elements(By.CSS_SELECTOR, ".user-rating").text
+        assert "8" in user_rating
+
+
+# Тест 6: Оценивание персоны
+@allure.story("Оценки")
+@allure.title("Добавление персоны в любимые")
+@pytest.mark.skip(reason="Требуется авторизация с особыми правами")
+def test_rate_person(main_page):
+    """Тест добавления персоны в любимые."""
+    with allure.step("Открыть страницу персоны 'Леонардо ДиКаприо'"):
+        person_page = PersonPage(main_page.browser)
+        person_page.open(1900)
+
+    with allure.step("Нажать кнопку 'Любимая звезда'"):
+        favorite_button = main_page._wait_for_elements(By.CSS_SELECTOR, "[aria-label='Добавить в любимые звезды']")
+        initial_state = favorite_button.get_attribute("aria-checked")
+        favorite_button.click()
+
+    with allure.step("Проверить изменение состояния кнопки"):
+        new_state = favorite_button.get_attribute("aria-checked")
+        assert new_state != initial_state
+
+
+# Тест 7: Расширенный поиск
+@allure.story("Поиск")
+@allure.title("Расширенный поиск по жанру и году")
+def test_advanced_search(main_page):
+    """Тест расширенного поиска."""
+    with allure.step("Открыть страницу расширенного поиска"):
+        main_page.browser.get(f"{main_url}search/advanced/")
+
+    with allure.step("Установить фильтр: Жанр='комедия', Год='2020-2023'"):
+        genre_checkbox = main_page._wait_for_elements(By.XPATH,
+                                                      "//span[contains(text(),'комедия')]/preceding-sibling::input")
+        genre_checkbox.click()
+
+        year_from = main_page._wait_for_elements(By.NAME, "yearFrom")
+        year_from.clear()
+        year_from.send_keys("2020")
+
+        year_to = main_page._wait_for_elements(By.NAME, "yearTo")
+        year_to.clear()
+        year_to.send_keys("2023")
+
+        submit_button = main_page._wait_for_elements(By.CSS_SELECTOR, ".form__submit")
+        submit_button.click()
+
+    search_page = SearchPage(main_page.browser)
+    with allure.step("Проверить результаты поиска"):
+        assert search_page.get_search_results_count() > 0
