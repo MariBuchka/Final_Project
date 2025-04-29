@@ -42,7 +42,7 @@ Final_Project/
 - Запуск тестов API по команде: `python -m pytest test_api.py --alluredir allure-result`
 - Запуск тестов UI по команде: `python -m pytest test_ui.py --alluredir allure-result`
 - Запуск всех тестов: `python -m pytest --alluredir allure-result`
-- Генерация отчета по команде: `allure serve allure-results`
+- Генерация отчета по команде: `allure serve allure-result`
 
 ### Описание базового синтаксиса и технологий
 
@@ -52,7 +52,7 @@ Final_Project/
 2. **Python 3.13**: основной язык реализации тестов;
 3. **Pytest**: фреймворк для организации тестов;
 4. **Requests 2.32**: для выполнения HTTP-запросов и тестирования API;
-5. **Selenium 4.31**: для автоматизации веб-взаимодействий;
+5. **Selenium 4.28**: для автоматизации веб-взаимодействий;
 6. **Allure Report**: для генерации детализированных отчетов.
 
 ### Форматирование кода
